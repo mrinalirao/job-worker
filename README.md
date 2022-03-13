@@ -39,6 +39,7 @@ Authorization is based on role-based access control. For the purpose of this exe
 - **user**: The user role also has access to all RPCs but is restricted to have access to their own jobs and cannot access other jobs in the system
 
 The AuthService is responsible for issuing JWT's to our users. The service and message definitions can be found [here](./proto/authservice.proto)
+
 The JWT claims will contain information about the logged-in user's role.
 For the purpose of this exercise we will pre-seed two users into the system, one with `admin` and the other with `user` role.
 We also set the expiry time to 30 days.
