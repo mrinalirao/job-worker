@@ -45,9 +45,3 @@ message GetStreamRequest{
 message GetStreamResponse{
   bytes result = 1;
 }
-
-
-
-
-
-
