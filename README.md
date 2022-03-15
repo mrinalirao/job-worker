@@ -8,14 +8,21 @@ The Job worker service provides an API to run arbitrary Linux processes.
 The Library supports the following features:
 - **Start Job**: A job is a linux command which is represented internally by a JobID. A random UUID is assigned to the underlying job
 - **Stop Job**: Stops a job with the given JobID. For this POC, we send a SIGKILL signal to the running process.
-- **Get Job Status**: Gets the status of a job with the given JobID. Jobs can have 3 statuses:
-        
+- **Get Job Status**: Gets the status of a job with the given JobID and the exit code of the process. Jobs can have 3 statuses:
+
     - RUNNING: Job process started
     - STOPPED: Job is force stopped
     - FINISHED: Job finished successfully or exited with error
+  
+  For this exercise, the Library will keep the job status in memory (in a map),if the library goes down this data will be lost. 
+  
 - **Stream Output**: When a user streams the output of a job with the given JobID, the worker adds the userID as a subscriber of the job.
   The output is then published to all the active listeners until no more data is left to stream or a job is stopped forcefully, whichever happens first.
   Both Stderr and Stdout output will be combined for the sake of simplicity.
+  
+  Multiple clients should be able to read the output of the job from the beginning. When a job is started, the worker will add the output of the job to a temporary file and monitor for changes to the file event.
+  However, the drawback of such a system, is the files could consume a lot of disk space and can potentially crash the app.
+  In a production system this would probably be stored in distributed file system instead.
 
 The library also adds resource control using **cgroups V2**. The limits for CPU, memory and Disk IO will be hardcoded in the codebase itself.
 In a production system, these would be passed in via a config file.
@@ -26,6 +33,8 @@ Exposes gRPC API's to access the underlying library's functionality over network
 The service and message definitions can be found [here](./proto/workerservice.proto)
 
 ### Security
+
+Transport security is based on TLS 1.3.
 
 #### Authentication
 
@@ -38,12 +47,8 @@ Authorization is based on role-based access control. For the purpose of this exe
 - **admin**: The admin user has access to all RPCs and additionally can access jobs of any user in the system
 - **user**: The user role also has access to all RPCs but is restricted to have access to their own jobs and cannot access other jobs in the system
 
-The AuthService is responsible for issuing JWT's to our users. The service and message definitions can be found [here](./proto/authservice.proto)
-
-The JWT claims will contain information about the logged-in user's role.
-For the purpose of this exercise we will pre-seed two users into the system, one with `admin` and the other with `user` role.
-We also set the expiry time to 30 days.
-In a production system we would expire the JWT every 15 minutes or so and the AuthService would expose an RPC to refresh the token. However, this is outside the scope of this exercise.
+The user role will be added into the client certificate as an extention. We will use roleOid 1.2.840.10070.8.1 = ASN1:UTF8String for the client certificate.
+And have the server read and verify the roles to authorize the client.
 
 ### The CLI
 

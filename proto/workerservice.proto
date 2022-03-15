@@ -36,6 +36,7 @@ enum Status {
 
 message GetStatusResponse{
   Status status = 1;
+  int32 exitcode = 2;
 }
 
 message GetStreamRequest{
