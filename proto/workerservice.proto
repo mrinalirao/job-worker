@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package proto;
+
+option go_package ="/proto";
+
+service WorkerService {
+  rpc StartJob(StartJobRequest) returns (StartJobResponse) {}
+  rpc StopJob(StopJobRequest) returns (StopJobResponse) {}
+  rpc GetJobStatus(GetStatusRequest) returns (GetStatusResponse){}
+  rpc GetOutputStream(GetStreamRequest) returns (stream GetStreamResponse) {}
+}
+
+message StartJobRequest {
+  string cmd = 1;
+  repeated string args = 2;
+}
+message StartJobResponse {
+  string ID = 1;
+}
+
+message StopJobRequest{
+  string id = 1;
+}
+message StopJobResponse {}
+
+message GetStatusRequest{
+  string id = 1;
+}
+
+enum Status {
+  RUNNING = 0;
+  STOPPED = 1;
+  FINISHED = 2;
+}
+
+message GetStatusResponse{
+  Status status = 1;
+  int32 exitcode = 2;
+}
+
+message GetStreamRequest{
+  string id = 1;
+}
+
+message GetStreamResponse{
+  bytes result = 1;
+}
