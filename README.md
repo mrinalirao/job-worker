@@ -57,28 +57,29 @@ The CLI has a few base parameters that will need to be met for all subcommands
 
 Some examples are provided below.
 
-**Login Request**
-This issues a JWT which will be needed to access all the underlying gRPC API's
-```
-./client login -u <username> -p <password>  
-```
 
 **Start Job**
 Returns the Job ID of the job that is started
 ```
-./client start -t <JWT_Token> -c  <command> -args <arg1> <arg2>
+./client start -c  <command> -args <arg1> <arg2>
 ```
 
 **StopJob**
 Stops the job with the given ID
 ```
-./client stop -t <JWT_Token> -j <JobID>
+./client stop -j <JobID>
+```
+
+**GetStatus**
+Returns the job status of the job with the given ID
+```
+./client status -j <JobID>
 ```
 
 **StreamOutput**
 Streams the output of the job with the given ID
 ```
-./client stream -t <JWT_Token> -j <JobID>
+./client stream -j <JobID>
 ```
 
 ### Trade-Offs
