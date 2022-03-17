@@ -45,24 +45,23 @@ func TestWorker_GetStatus(t *testing.T) {
 
 	stat, err := w.GetStatus(jobID)
 	assert.Nil(t, err)
-	assert.Equal(t, JSTATUS_START, stat.JobStatus)
+	assert.Equal(t, Running, stat.JobStatus)
 
 	err = w.Stop(jobID)
 	assert.Nil(t, err)
 
 	stat, err = w.GetStatus(jobID)
 	assert.Nil(t, err)
-	assert.Equal(t, JSTATUS_STOPPED, stat.JobStatus)
+	assert.Equal(t, Stopped, stat.JobStatus)
 }
 
 func TestWorker_StreamExistingProcess(t *testing.T) {
 	w := NewWorker()
-	userID := "user1"
 	jobID, err := w.Start("bash", []string{"-c", "while true; do date; sleep 1; done"})
 	assert.Nil(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	logchan, err := w.GetOutput(ctx, jobID, userID)
+	logchan, err := w.GetOutput(ctx, jobID)
 	assert.Nil(t, err)
 
 	assert.NotNil(t, <-logchan)
@@ -75,8 +74,7 @@ func TestWorker_StreamExistingProcess(t *testing.T) {
 func TestWorker_StreamNonExistingProcess(t *testing.T) {
 	w := NewWorker()
 	randomJobID, _ := uuid.NewRandom()
-	userID := "user1"
-	logchan, err := w.GetOutput(context.Background(), randomJobID.String(), userID)
+	logchan, err := w.GetOutput(context.Background(), randomJobID.String())
 	assert.Error(t, err)
 	assert.Nil(t, logchan)
 }

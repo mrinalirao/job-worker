@@ -5,15 +5,18 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"os"
 	"os/exec"
 	"sync"
 	"syscall"
 )
 
+type StatusEnum int
+
 const (
-	JSTATUS_START   = "running"
-	JSTATUS_END     = "finished"
-	JSTATUS_STOPPED = "stopped"
+	Running StatusEnum = iota
+	Stopped
+	Finished
 )
 
 //Worker defines the operations to manage Jobs.
@@ -21,36 +24,38 @@ type Worker interface {
 	Start(cmdName string, args []string) (string, error)
 	Stop(jobID string) error
 	GetStatus(jobID string) (Status, error)
-	GetOutput(ctx context.Context, jobID string, userID string) (chan string, error)
+	GetOutput(ctx context.Context, jobID string) (<-chan string, error)
 }
 
-// Job represents a Linux process scheduled by the Worker.
-type Job struct {
-	ID       uuid.UUID
-	CmdName  string
-	Args     []string
-	Status   string
-	ExitCode int
-	Cmd      *exec.Cmd
+// job represents a Linux process scheduled by the Worker.
+type job struct {
+	id       uuid.UUID
+	cmdName  string
+	args     []string
+	status   StatusEnum
+	exitCode int
+	cmd      *exec.Cmd
+	doneChan chan struct{} // closed when done running
+
 }
 
 type worker struct {
 	// log is responsible to handle the output of a job
-	log  *Logger
-	jobs map[string]*Job
+	log  *logger
+	jobs map[string]*job
 	sync.RWMutex
 }
 
 // Status of the job.
 type Status struct {
-	JobStatus string
+	JobStatus StatusEnum
 	ExitCode  int
 }
 
 // NewWorker creates a new Worker instance.
 func NewWorker() Worker {
 	return &worker{
-		jobs: make(map[string]*Job),
+		jobs: make(map[string]*job),
 		log:  NewLogger(),
 	}
 }
@@ -62,7 +67,7 @@ func (w *worker) Start(cmdName string, args []string) (string, error) {
 	fileName := jobID.String()
 	logfile, err := w.log.CreateFile(fileName)
 	if err != nil {
-		return jobID.String(), err
+		return "", err
 	}
 	cmd := exec.Command(cmdName, args...)
 	cmd.Stdout = logfile
@@ -70,80 +75,92 @@ func (w *worker) Start(cmdName string, args []string) (string, error) {
 
 	if err := cmd.Start(); err != nil {
 		if err := w.log.RemoveFile(fileName); err != nil {
-			logrus.Errorf("Unable to remove file")
-			return jobID.String(), err
+			logrus.Errorf("Unable to remove file, err: %v", err)
 		}
 		return jobID.String(), err
 	}
 
-	job := &Job{
-		ID:      jobID,
-		CmdName: cmdName,
-		Args:    args,
-		Cmd:     cmd,
+	job := &job{
+		id:       jobID,
+		cmdName:  cmdName,
+		args:     args,
+		cmd:      cmd,
+		status:   Running,
+		doneChan: make(chan struct{}),
 	}
 
 	w.Lock()
 	//TODO: Add pid to cgroup
-	job.Status = JSTATUS_START
+
 	w.jobs[jobID.String()] = job
 	w.Unlock()
 	go w.run(job)
 	return jobID.String(), nil
 }
 
-func (w *worker) run(j *Job) {
+func (w *worker) run(j *job) {
+	defer close(j.doneChan)
 	//Wait for the cmd to be finished or killed
-	if err := j.Cmd.Wait(); err != nil {
+	if err := j.cmd.Wait(); err != nil {
 		logrus.WithFields(logrus.Fields{
-			"Job ID": j.ID,
-			"Name":   j.CmdName,
-			"Args":   j.Args}).Errorf("execution failed: %v", err)
+			"Job ID": j.id,
+			"Name":   j.cmdName,
+			"Args":   j.args}).Errorf("execution failed: %v", err)
 	}
 	w.Lock()
-	j.ExitCode = j.Cmd.ProcessState.ExitCode()
-	if j.Status != JSTATUS_STOPPED {
-		j.Status = JSTATUS_END
+	j.exitCode = j.cmd.ProcessState.ExitCode()
+	if j.status != Stopped {
+		j.status = Finished
 	}
 	w.Unlock()
 }
 
 // Stops the underlying linux job with the given JobID
 func (w *worker) Stop(jobID string) error {
-	w.RLock()
+	w.Lock()
+	defer w.Unlock()
 	job, found := w.jobs[jobID]
-	w.RUnlock()
 	if !found {
 		return fmt.Errorf("job %v not found", jobID)
 	}
-	w.Lock()
-	if job.Status != JSTATUS_END {
-		job.Status = JSTATUS_STOPPED
-		job.Cmd.Process.Signal(syscall.SIGKILL)
+
+	select {
+	case <-job.doneChan:
+		return nil
+	default:
+		// NOTE: This potentially is in race condition with Wait call in the run goroutine started by Start,
+		// so we check for ErrProcessDone even though we acquired the lock.
+		switch err := job.cmd.Process.Signal(syscall.SIGKILL); err {
+		case os.ErrProcessDone:
+			return nil
+		default:
+			job.status = Stopped
+			return err
+		}
 	}
-	w.Unlock()
-	return nil
 }
 
 // GetStatus returns the status of the job with the given JobID.
 func (w *worker) GetStatus(jobID string) (Status, error) {
 	w.RLock()
 	job, found := w.jobs[jobID]
+	// return a copy of status to avoid data races
+	stat, exitCode := (*job).status, (*job).exitCode
 	w.RUnlock()
 	if !found {
 		return Status{}, fmt.Errorf("job %v not found", jobID)
 	}
-	return Status{job.Status, job.ExitCode}, nil
+	return Status{stat, exitCode}, nil
 }
 
 // GetOutput reads from the log file. If the context is canceled the channel will
 // be closed and the tailing will be stopped.
-func (w *worker) GetOutput(ctx context.Context, jobID string, userID string) (chan string, error) {
+func (w *worker) GetOutput(ctx context.Context, jobID string) (<-chan string, error) {
 	w.RLock()
 	job, found := w.jobs[jobID]
 	w.RUnlock()
 	if !found {
 		return nil, fmt.Errorf("job %v not found", jobID)
 	}
-	return w.log.TailReader(ctx, job.ID.String(), userID)
+	return w.log.TailReader(ctx, job.id.String(), job.doneChan)
 }
