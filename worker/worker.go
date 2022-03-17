@@ -143,13 +143,13 @@ func (w *worker) Stop(jobID string) error {
 // GetStatus returns the status of the job with the given JobID.
 func (w *worker) GetStatus(jobID string) (Status, error) {
 	w.RLock()
+	defer w.RUnlock()
 	job, found := w.jobs[jobID]
 	if !found {
 		return Status{}, fmt.Errorf("job %v not found", jobID)
 	}
 	// return a copy of status to avoid data races
 	stat, exitCode := job.status, job.exitCode
-	w.RUnlock()
 
 	return Status{stat, exitCode}, nil
 }
