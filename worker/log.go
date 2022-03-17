@@ -101,6 +101,7 @@ func (l *logger) TailReader(ctx context.Context, jobID string, doneCh chan struc
 					return
 				}
 				logrus.Error("error:", err)
+				return
 			}
 		}
 	}()
