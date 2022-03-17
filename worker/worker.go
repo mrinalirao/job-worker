@@ -56,7 +56,7 @@ type Status struct {
 func NewWorker() Worker {
 	return &worker{
 		jobs: make(map[string]*job),
-		log:  NewLogger(),
+		log:  newLogger(),
 	}
 }
 
@@ -75,7 +75,7 @@ func (w *worker) Start(cmdName string, args []string) (string, error) {
 
 	if err := cmd.Start(); err != nil {
 		if err := w.log.RemoveFile(fileName); err != nil {
-			logrus.Errorf("Unable to remove file, err: %v", err)
+			logrus.Errorf("Unable to remove file, err: %w", err)
 		}
 		return jobID.String(), err
 	}
@@ -105,7 +105,7 @@ func (w *worker) run(j *job) {
 		logrus.WithFields(logrus.Fields{
 			"Job ID": j.id,
 			"Name":   j.cmdName,
-			"Args":   j.args}).Errorf("execution failed: %v", err)
+			"Args":   j.args}).Errorf("execution failed: %w", err)
 	}
 	w.Lock()
 	j.exitCode = j.cmd.ProcessState.ExitCode()
@@ -144,12 +144,13 @@ func (w *worker) Stop(jobID string) error {
 func (w *worker) GetStatus(jobID string) (Status, error) {
 	w.RLock()
 	job, found := w.jobs[jobID]
-	// return a copy of status to avoid data races
-	stat, exitCode := (*job).status, (*job).exitCode
-	w.RUnlock()
 	if !found {
 		return Status{}, fmt.Errorf("job %v not found", jobID)
 	}
+	// return a copy of status to avoid data races
+	stat, exitCode := job.status, job.exitCode
+	w.RUnlock()
+
 	return Status{stat, exitCode}, nil
 }
 

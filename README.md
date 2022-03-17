@@ -88,5 +88,6 @@ Streams the output of the job with the given ID
 - Users/Roles will be pre-seeded on the server side.
 - Configuration will be harded in the app itself
 - The scope of this project would only deal with a single linux worker server interfacing with multiple clients
+- Most of the time, the users want to see the full log content to check if the job performs as expected. The Worker writes the process output (stderr/stdout) on the disk as a log file. On the other hand, the old log files consume disk space and can potentially crash the system when no more space is left. Also a malicious or misconfigured program could potentially truncate the output file.
 
 

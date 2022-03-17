@@ -13,14 +13,14 @@ import (
 )
 
 //The buffer size 1024 is just chosen randomly, performance is only affected when the process writes huge amount of data to the file
-const BufferSize = 1024
+const bufferSize = 1024
 
 type logger struct {
 	logStore string
 	sync.RWMutex
 }
 
-func NewLogger() *logger {
+func newLogger() *logger {
 	return &logger{
 		logStore: os.TempDir(),
 	}
@@ -39,7 +39,7 @@ func (l *logger) RemoveFile(fileName string) error {
 }
 
 // TailReader waits until new data is written to file instead of returning io.EOF
-func (l *logger) TailReader(ctx context.Context, jobID string, doneCh chan struct{}) (chan string, error) {
+func (l *logger) TailReader(ctx context.Context, jobID string, doneCh chan struct{}) (<-chan string, error) {
 	path := filepath.Join(l.logStore, fmt.Sprintf("%s.log", jobID))
 	file, err := os.OpenFile(path, os.O_RDONLY, 0644)
 	if err != nil {
@@ -49,29 +49,29 @@ func (l *logger) TailReader(ctx context.Context, jobID string, doneCh chan struc
 	//watcher to track file changes internally
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		logrus.Errorf("failed to create a watcher: %v", err)
+		logrus.Errorf("failed to create a watcher: %w", err)
 		return nil, err
 	}
 
 	err = watcher.Add(path)
 	if err != nil {
-		logrus.Errorf("failed to watch file: %v", err)
+		logrus.Errorf("failed to watch file: %w", err)
 		return nil, err
 	}
 	outputChan := make(chan string)
 	go func() {
 		defer func() {
 			if err := file.Close(); err != nil {
-				logrus.Errorf("fail to close the log file: %v", err)
+				logrus.Errorf("fail to close the log file: %w", err)
 			}
 			close(outputChan)
 			if err := watcher.Close(); err != nil {
-				logrus.Errorf("failed to close file watcher: %v", err)
+				logrus.Errorf("failed to close file watcher: %w", err)
 			}
 		}()
 		// reads from the begin
-		if err := l.streamOutput(ctx, outputChan, file); err != nil && err != io.EOF {
-			logrus.Errorf("failed to stream output: %v", err)
+		if err := l.sendOutputTail(ctx, outputChan, file); err != nil {
+			logrus.Errorf("failed to stream output: %w", err)
 			return
 		}
 
@@ -79,10 +79,11 @@ func (l *logger) TailReader(ctx context.Context, jobID string, doneCh chan struc
 		for {
 			select {
 			case <-ctx.Done():
+				logrus.Error(ctx.Err())
 				return
 			case <-doneCh:
-				if err := l.streamOutput(ctx, outputChan, file); err != nil && err != io.EOF {
-					logrus.Errorf("failed to stream output: %v", err)
+				if err := l.sendOutputTail(ctx, outputChan, file); err != nil {
+					logrus.Errorf("failed to stream output: %w", err)
 					return
 				}
 			case event, ok := <-watcher.Events:
@@ -91,8 +92,8 @@ func (l *logger) TailReader(ctx context.Context, jobID string, doneCh chan struc
 				}
 				logrus.Debugf("event: %v", event)
 				if event.Op&fsnotify.Write == fsnotify.Write {
-					if err := l.streamOutput(ctx, outputChan, file); err != nil && err != io.EOF {
-						logrus.Errorf("failed to stream output: %v", err)
+					if err := l.sendOutputTail(ctx, outputChan, file); err != nil {
+						logrus.Errorf("failed to stream output: %w", err)
 						return
 					}
 				}
@@ -108,26 +109,29 @@ func (l *logger) TailReader(ctx context.Context, jobID string, doneCh chan struc
 	return outputChan, nil
 }
 
-func (l *logger) streamOutput(ctx context.Context, outputChan chan string, file *os.File) error {
+func (l *logger) sendOutputTail(ctx context.Context, outputChan chan<- string, file *os.File) error {
 	for {
 		// TODO: pass configs from a config file
-		buf := make([]byte, BufferSize)
+		buf := make([]byte, bufferSize)
 		n, err := file.Read(buf)
 		if err != nil {
 			if n > 0 {
-				outputChan <- string(buf[:n])
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				default:
+					outputChan <- string(buf[:n])
+				}
 			}
 			if err != io.EOF {
-				return fmt.Errorf("failed to read file: %v", err)
+				return fmt.Errorf("failed to read file: %w", err)
 			}
-			if err == io.EOF {
-				return nil
-			}
+			return nil
 		}
 		select {
 		case outputChan <- string(buf[:n]):
 		case <-ctx.Done():
-			return errors.New("output stream cancelled")
+			return errors.New(fmt.Sprintf("output stream cancelled: %w", ctx.Err()))
 		}
 	}
 }
