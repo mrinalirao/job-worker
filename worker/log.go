@@ -2,7 +2,6 @@ package worker
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
@@ -49,29 +48,29 @@ func (l *logger) TailReader(ctx context.Context, jobID string, doneCh chan struc
 	//watcher to track file changes internally
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		logrus.Errorf("failed to create a watcher: %w", err)
+		logrus.Errorf("failed to create a watcher: %v", err)
 		return nil, err
 	}
 
 	err = watcher.Add(path)
 	if err != nil {
-		logrus.Errorf("failed to watch file: %w", err)
+		logrus.Errorf("failed to watch file: %v", err)
 		return nil, err
 	}
 	outputChan := make(chan string)
 	go func() {
 		defer func() {
 			if err := file.Close(); err != nil {
-				logrus.Errorf("fail to close the log file: %w", err)
+				logrus.Errorf("fail to close the log file: %v", err)
 			}
 			close(outputChan)
 			if err := watcher.Close(); err != nil {
-				logrus.Errorf("failed to close file watcher: %w", err)
+				logrus.Errorf("failed to close file watcher: %v", err)
 			}
 		}()
 		// reads from the begin
 		if err := l.sendOutputTail(ctx, outputChan, file); err != nil {
-			logrus.Errorf("failed to stream output: %w", err)
+			logrus.Errorf("failed to stream output: %v", err)
 			return
 		}
 
@@ -83,7 +82,7 @@ func (l *logger) TailReader(ctx context.Context, jobID string, doneCh chan struc
 				return
 			case <-doneCh:
 				if err := l.sendOutputTail(ctx, outputChan, file); err != nil {
-					logrus.Errorf("failed to stream output: %w", err)
+					logrus.Errorf("failed to stream output: %v", err)
 					return
 				}
 			case event, ok := <-watcher.Events:
@@ -93,7 +92,7 @@ func (l *logger) TailReader(ctx context.Context, jobID string, doneCh chan struc
 				logrus.Debugf("event: %v", event)
 				if event.Op&fsnotify.Write == fsnotify.Write {
 					if err := l.sendOutputTail(ctx, outputChan, file); err != nil {
-						logrus.Errorf("failed to stream output: %w", err)
+						logrus.Errorf("failed to stream output: %v", err)
 						return
 					}
 				}
@@ -131,7 +130,7 @@ func (l *logger) sendOutputTail(ctx context.Context, outputChan chan<- string, f
 		select {
 		case outputChan <- string(buf[:n]):
 		case <-ctx.Done():
-			return errors.New(fmt.Sprintf("output stream cancelled: %w", ctx.Err()))
+			return fmt.Errorf("output stream cancelled: %w", ctx.Err())
 		}
 	}
 }

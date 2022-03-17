@@ -75,7 +75,7 @@ func (w *worker) Start(cmdName string, args []string) (string, error) {
 
 	if err := cmd.Start(); err != nil {
 		if err := w.log.RemoveFile(fileName); err != nil {
-			logrus.Errorf("Unable to remove file, err: %w", err)
+			logrus.Errorf("Unable to remove file, err: %v", err)
 		}
 		return jobID.String(), err
 	}
@@ -105,7 +105,7 @@ func (w *worker) run(j *job) {
 		logrus.WithFields(logrus.Fields{
 			"Job ID": j.id,
 			"Name":   j.cmdName,
-			"Args":   j.args}).Errorf("execution failed: %w", err)
+			"Args":   j.args}).Errorf("execution failed: %v", err)
 	}
 	w.Lock()
 	j.exitCode = j.cmd.ProcessState.ExitCode()
