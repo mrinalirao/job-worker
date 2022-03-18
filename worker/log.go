@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sync"
 )
 
 //The buffer size 1024 is just chosen randomly, performance is only affected when the process writes huge amount of data to the file
@@ -16,7 +15,6 @@ const bufferSize = 1024
 
 type logger struct {
 	logStore string
-	sync.RWMutex
 }
 
 func newLogger() *logger {
@@ -26,14 +24,14 @@ func newLogger() *logger {
 }
 
 // CreateFile creates and returns a os.File. If the file can't be created an error will be returned.
-func (l *logger) CreateFile(fileName string) (*os.File, error) {
-	path := filepath.Join(l.logStore, fmt.Sprintf("%s.log", fileName))
+func (l *logger) CreateFile(JobID string) (*os.File, error) {
+	path := filepath.Join(l.logStore, fmt.Sprintf("%s.log", JobID))
 	return os.Create(path)
 }
 
 // RemoveFile deletes the named file under the log store.
-func (l *logger) RemoveFile(fileName string) error {
-	path := filepath.Join(l.logStore, fmt.Sprintf("%s.log", fileName))
+func (l *logger) RemoveFile(JobID string) error {
+	path := filepath.Join(l.logStore, fmt.Sprintf("%s.log", JobID))
 	return os.Remove(path)
 }
 
