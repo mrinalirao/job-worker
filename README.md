@@ -57,28 +57,29 @@ The CLI has a few base parameters that will need to be met for all subcommands
 
 Some examples are provided below.
 
-**Login Request**
-This issues a JWT which will be needed to access all the underlying gRPC API's
-```
-./client login -u <username> -p <password>  
-```
 
 **Start Job**
 Returns the Job ID of the job that is started
 ```
-./client start -t <JWT_Token> -c  <command> -args <arg1> <arg2>
+./client start -c  <command> -args <arg1> <arg2>
 ```
 
 **StopJob**
 Stops the job with the given ID
 ```
-./client stop -t <JWT_Token> -j <JobID>
+./client stop -j <JobID>
+```
+
+**GetStatus**
+Returns the job status of the job with the given ID
+```
+./client status -j <JobID>
 ```
 
 **StreamOutput**
 Streams the output of the job with the given ID
 ```
-./client stream -t <JWT_Token> -j <JobID>
+./client stream -j <JobID>
 ```
 
 ### Trade-Offs
@@ -87,5 +88,6 @@ Streams the output of the job with the given ID
 - Users/Roles will be pre-seeded on the server side.
 - Configuration will be harded in the app itself
 - The scope of this project would only deal with a single linux worker server interfacing with multiple clients
+- Most of the time, the users want to see the full log content to check if the job performs as expected. The Worker writes the process output (stderr/stdout) on the disk as a log file. On the other hand, the old log files consume disk space and can potentially crash the system when no more space is left. Also a malicious or misconfigured program could potentially truncate the output file.
 
 
