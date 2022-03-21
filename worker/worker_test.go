@@ -8,6 +8,11 @@ import (
 	"time"
 )
 
+var _ = (func() interface{} {
+	testmode = true
+	return nil
+}())
+
 func TestWorker_Start(t *testing.T) {
 	w := NewWorker()
 	jobID, err := w.Start("echo", []string{"foo"})

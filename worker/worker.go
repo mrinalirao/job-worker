@@ -90,10 +90,15 @@ func (w *worker) Start(cmdName string, args []string) (string, error) {
 	}
 
 	w.Lock()
-	//TODO: Add pid to cgroup
-
 	w.jobs[jobID.String()] = job
 	w.Unlock()
+	pid := cmd.Process.Pid
+	// Note: Ideally, the CPU, memory and disk IO config would be passed in as part of the StartJob request for each job. These should be included in the proto.
+	// For this exercise, I have decided to cut scope and set a default value for these limits if none are passed in.
+	if err := addCgroupLimit(jobID.String(), pid, nil, nil, nil, nil, nil, nil); err != nil {
+		logrus.Errorf("error adding cgroup limits for job: %v", err)
+		return jobID.String(), err
+	}
 	go w.run(job)
 	return jobID.String(), nil
 }
