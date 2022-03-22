@@ -40,6 +40,10 @@ type recvWrapper struct {
 	*interceptor
 }
 
+func (r *recvWrapper) Context() context.Context {
+	return r.ctx
+}
+
 func (r *recvWrapper) RecvMsg(m interface{}) error {
 	if err := r.ServerStream.RecvMsg(m); err != nil {
 		logrus.Errorf("failed to intercept stream: %v", err)

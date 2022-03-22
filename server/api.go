@@ -21,14 +21,14 @@ func (s *Server) StartJob(ctx context.Context, r *proto.StartJobRequest) (*proto
 
 	jobID, err := s.Worker.Start(r.Cmd, r.Args)
 	if err != nil {
-		log.WithError(err)
+		log.WithError(err).Error("failed to start job")
 		//Note: we intentionally do not expose the errors to the user as the errors might contain internal implementation details.
 		// eg: Unable to remove file, in a prod system we will use different Error types rather than passing error strings and map them to error codes in gRPC.
 		return nil, status.Errorf(codes.Internal, "failed to start job")
 	}
 
 	if err := s.UserJobStore.SetJobUser(jobID, user.Name); err != nil {
-		log.WithError(err)
+		log.WithError(err).Error("failed to start job")
 		return nil, status.Errorf(codes.Internal, "failed to save job for user")
 	}
 
