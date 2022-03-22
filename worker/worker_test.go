@@ -8,10 +8,9 @@ import (
 	"time"
 )
 
-var _ = (func() interface{} {
+func init() {
 	testmode = true
-	return nil
-}())
+}
 
 func TestWorker_Start(t *testing.T) {
 	w := NewWorker()

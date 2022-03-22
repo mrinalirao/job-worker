@@ -3,6 +3,7 @@ package server
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"github.com/mrinalirao/job-worker/proto"
 	"github.com/mrinalirao/job-worker/store"
@@ -10,8 +11,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"io/ioutil"
 	"net"
+	"os"
 )
 
 type Server struct {
@@ -25,19 +26,19 @@ func loadTLSCredentials() (credentials.TransportCredentials, error) {
 	//TODO: Pass certificates via config
 	serverCert, err := tls.LoadX509KeyPair("cert/server-cert.pem", "cert/server-key.pem")
 	if err != nil {
-		return nil, fmt.Errorf("Failed to load server certificate and key. %w", err)
+		return nil, fmt.Errorf("failed to load server certificate and key. %w", err)
 	}
 
 	// Load the CA certificates
-	trustedCert, err := ioutil.ReadFile("cert/client-ca-cert.pem")
+	trustedCert, err := os.ReadFile("cert/client-ca-cert.pem")
 	if err != nil {
-		return nil, fmt.Errorf("Failed to load trusted certificate. %s.", err)
+		return nil, fmt.Errorf("failed to load trusted certificate. %s.", err)
 	}
 
 	// add CA certificate to certificate pool
 	certPool := x509.NewCertPool()
 	if !certPool.AppendCertsFromPEM(trustedCert) {
-		return nil, fmt.Errorf("Failed to append trusted certificate to certificate pool. %s.", err)
+		return nil, errors.New("failed to append certificate pem")
 	}
 
 	config := &tls.Config{
@@ -69,7 +70,7 @@ func createServer(cred credentials.TransportCredentials) (*grpc.Server, net.List
 	return grpcServer, lis, nil
 }
 
-func StartServer() error {
+func RunServer() error {
 	cred, err := loadTLSCredentials()
 	if err != nil {
 		return err

@@ -2,14 +2,13 @@ package server
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"github.com/mrinalirao/job-worker/proto"
 	"github.com/mrinalirao/job-worker/store"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
@@ -27,7 +26,7 @@ func NewInterceptor(store store.JobUserStore) *interceptor {
 // UnaryAuthInterceptor intercept unary calls to authorize the user
 // It checks user role using certification extension oid 1.2.840.10070.8.1, it also checks if user has access to the requested resource
 func (i *interceptor) UnaryAuthInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	jobID := interceptRequest(info.FullMethod, req)
+	jobID := jobIdFromRequest(req)
 	newCtx, err := i.authorize(ctx, info.FullMethod, jobID)
 	if err != nil {
 		return nil, status.Error(codes.PermissionDenied, err.Error())
@@ -48,12 +47,11 @@ func (r *recvWrapper) RecvMsg(m interface{}) error {
 	}
 	if req, ok := m.(*proto.GetStreamRequest); ok {
 		jobID := req.GetId()
-		newCtx, err := r.authorize(r.ctx, "/proto.WorkerService/GetJobStream", jobID)
+		newCtx, err := r.authorize(r.ctx, "/proto.WorkerService/GetOutputStream", jobID)
 		if err != nil {
 			return err
 		}
-		md, _ := metadata.FromIncomingContext(newCtx)
-		r.ctx = metadata.NewIncomingContext(newCtx, md)
+		r.ctx = newCtx
 	}
 	return nil
 }
@@ -71,70 +69,57 @@ func (i *interceptor) authorize(ctx context.Context, method string, jobID string
 	// reads the peer information from context
 	peer, ok := peer.FromContext(ctx)
 	if !ok {
-		return ctx, fmt.Errorf("error to read peer information")
+		return ctx, errors.New("error to read peer information")
 	}
 	// reads user tls information
 	tlsInfo, ok := peer.AuthInfo.(credentials.TLSInfo)
 	if !ok {
-		return ctx, fmt.Errorf("error to get auth information")
+		return ctx, errors.New("error to get auth information")
 	}
 	// get user roles
 	certs := tlsInfo.State.VerifiedChains
 	if len(certs) == 0 || len(certs[0]) == 0 {
-		return ctx, fmt.Errorf("missing certificate chain")
+		return ctx, errors.New("missing certificate chain")
 	}
 
 	// find user roles from certificate extensions
 	var roles []string
 	for _, ext := range certs[0][0].Extensions {
-		if oid := OidToString(ext.Id); IsOidRole(oid) {
+		if ext.Id.Equal(oidRole) {
 			roles = ParseRoles(string(ext.Value))
 			break
 		}
 	}
 	// check user has access to execute a specific method
 	if !HasAccess(method, roles) {
-		return ctx, fmt.Errorf("unauthorized, user does not have privileges")
+		return ctx, errors.New("unauthorized, user does not have privileges")
 	}
 
 	// Get subject common name
 	userName := certs[0][0].Subject.CommonName
 
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return ctx, fmt.Errorf("")
-	}
-	// inject username into context
-	md.Append("username", userName)
-	c := metadata.NewIncomingContext(ctx, md)
-
-	if jobID != "" && userName != "adminuser" {
+	if jobID != "" && !contains("admin", roles) {
 		u, err := i.jobUserStore.GetUser(jobID)
 		if err != nil {
-			return ctx, fmt.Errorf("failed to verify user access to job")
+			return ctx, errors.New("failed to verify user access to job")
 		}
 		if u != userName {
-			return c, fmt.Errorf("no does not have access to this job")
+			return ctx, errors.New("no does not have access to this job")
 		}
 	}
-	return c, nil
+	return context.WithValue(ctx, userKey{}, &User{
+		Name: userName,
+	}), nil
 }
 
-// Intercepts the request to get the jobID
-func interceptRequest(method string, req interface{}) string {
-	switch req.(type) {
-	case *proto.StartJobRequest:
-		return ""
+// jobIdFromRequest returns the jobID from the request
+func jobIdFromRequest(req interface{}) string {
+	switch r := req.(type) {
 	case *proto.StopJobRequest:
-		if req, ok := req.(*proto.StopJobRequest); ok {
-			return req.GetId()
-		}
+		return r.GetId()
 	case *proto.GetStatusRequest:
-		if req, ok := req.(*proto.GetStatusRequest); ok {
-			return req.GetId()
-		}
+		return r.GetId()
 	default:
-		return ""
 	}
 	return ""
 }

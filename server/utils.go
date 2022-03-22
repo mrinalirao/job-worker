@@ -1,28 +1,19 @@
 package server
 
 import (
-	"strconv"
+	"context"
 	"strings"
 	"unicode"
 )
 
+type userKey struct{}
+
+type User struct {
+	Name string
+}
+
 // oidRole oid identifier used to store user roles
-const oidRole string = "1.2.840.10070.8.1"
-
-// OidToString converts the int[] to string with
-// point separator between the values
-func OidToString(oid []int) string {
-	var strs []string
-	for _, value := range oid {
-		strs = append(strs, strconv.Itoa(value))
-	}
-	return strings.Join(strs, ".")
-}
-
-// IsOidRole validates the role oid
-func IsOidRole(oid string) bool {
-	return oidRole == oid
-}
+var oidRole = []int{1, 2, 840, 10070, 8, 1}
 
 // ParseRoles split the roles string by comma and removes spaces and non-printable characters like EOT
 func ParseRoles(roles string) []string {
@@ -31,10 +22,10 @@ func ParseRoles(roles string) []string {
 
 // access map initialization
 var access = map[string][]string{
-	"/proto.WorkerService/StartJob":     {"admin", "user"},
-	"/proto.WorkerService/StopJob":      {"admin", "user"},
-	"/proto.WorkerService/GetJobStatus": {"admin", "user"},
-	"/proto.WorkerService/GetJobStream": {"admin", "user"},
+	"/proto.WorkerService/StartJob":        {"admin", "user"},
+	"/proto.WorkerService/StopJob":         {"admin", "user"},
+	"/proto.WorkerService/GetJobStatus":    {"admin", "user"},
+	"/proto.WorkerService/GetOutputStream": {"admin", "user"},
 }
 
 // HasAccess verifies the access for a method and user roles
@@ -51,4 +42,20 @@ func HasAccess(method string, roles []string) bool {
 		}
 	}
 	return false
+}
+
+func contains(a string, list []string) bool {
+	for _, b := range list {
+		if b == a {
+			return true
+		}
+	}
+	return false
+}
+
+func UserFromContext(ctx context.Context) (*User, bool) {
+	if u := ctx.Value(userKey{}); u != nil {
+		return u.(*User), true
+	}
+	return nil, false
 }

@@ -6,7 +6,6 @@ import (
 	"github.com/mrinalirao/job-worker/worker"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -14,27 +13,22 @@ func (s *Server) StartJob(ctx context.Context, r *proto.StartJobRequest) (*proto
 	logFields := logrus.Fields{
 		"Action": "StartJob",
 	}
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return nil, status.Errorf(codes.Internal, "failed to start job")
+	log := logrus.WithFields(logFields)
+	user, ok := UserFromContext(ctx)
+	if !ok || user.Name == "" {
+		return nil, status.Errorf(codes.Internal, "failed to verify user")
 	}
 
 	jobID, err := s.Worker.Start(r.Cmd, r.Args)
 	if err != nil {
-		logrus.WithFields(logFields).Errorf(err.Error())
+		log.WithError(err)
 		//Note: we intentionally do not expose the errors to the user as the errors might contain internal implementation details.
 		// eg: Unable to remove file, in a prod system we will use different Error types rather than passing error strings and map them to error codes in gRPC.
 		return nil, status.Errorf(codes.Internal, "failed to start job")
 	}
 
-	// save jobID and userID in map, to prevent unauthorized access to job by other users
-	values := md["username"]
-	if len(values) == 0 {
-		return nil, status.Errorf(codes.Internal, "failed to verify user")
-	}
-	userID := values[0]
-	if err := s.UserJobStore.SetJobUser(jobID, userID); err != nil {
-		logrus.WithFields(logFields).Errorf(err.Error())
+	if err := s.UserJobStore.SetJobUser(jobID, user.Name); err != nil {
+		log.WithError(err)
 		return nil, status.Errorf(codes.Internal, "failed to save job for user")
 	}
 
