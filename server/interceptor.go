@@ -27,7 +27,11 @@ func NewInterceptor(store store.JobUserStore) *interceptor {
 // It checks user role using certification extension oid 1.2.840.10070.8.1, it also checks if user has access to the requested resource
 func (i *interceptor) UnaryAuthInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	jobID := jobIdFromRequest(req)
-	newCtx, err := i.authorize(ctx, info.FullMethod, jobID)
+	roles, err := i.authorize(ctx, info.FullMethod)
+	if err != nil {
+		return nil, status.Error(codes.PermissionDenied, err.Error())
+	}
+	newCtx, err := i.verifyAuthenticatedUser(ctx, jobID, roles)
 	if err != nil {
 		return nil, status.Error(codes.PermissionDenied, err.Error())
 	}
@@ -51,7 +55,11 @@ func (r *recvWrapper) RecvMsg(m interface{}) error {
 	}
 	if req, ok := m.(*proto.GetStreamRequest); ok {
 		jobID := req.GetId()
-		newCtx, err := r.authorize(r.ctx, "/proto.WorkerService/GetOutputStream", jobID)
+		roles, err := r.authorize(r.ctx, "/proto.WorkerService/GetOutputStream")
+		if err != nil {
+			return err
+		}
+		newCtx, err := r.verifyAuthenticatedUser(r.ctx, jobID, roles)
 		if err != nil {
 			return err
 		}
@@ -67,23 +75,31 @@ func (i *interceptor) StreamAuthInterceptor(srv interface{}, stream grpc.ServerS
 	return handler(srv, wrapper)
 }
 
-// authorize verifies the user information given by certificate
-// against the mapped roles for a specific method and also checks if user has access to requested job
-func (i *interceptor) authorize(ctx context.Context, method string, jobID string) (context.Context, error) {
+func tlsInfo(ctx context.Context) (*credentials.TLSInfo, error) {
 	// reads the peer information from context
-	peer, ok := peer.FromContext(ctx)
+	p, ok := peer.FromContext(ctx)
 	if !ok {
-		return ctx, errors.New("error to read peer information")
+		return nil, errors.New("no peer in request context")
 	}
 	// reads user tls information
-	tlsInfo, ok := peer.AuthInfo.(credentials.TLSInfo)
+	info, ok := p.AuthInfo.(credentials.TLSInfo)
 	if !ok {
-		return ctx, errors.New("error to get auth information")
+		return nil, errors.New("error to get auth information")
+	}
+	return &info, nil
+}
+
+// authorize verifies the user information given by certificate
+// against the mapped roles for a specific method
+func (i *interceptor) authorize(ctx context.Context, method string) ([]string, error) {
+	ti, err := tlsInfo(ctx)
+	if err != nil {
+		return nil, err
 	}
 	// get user roles
-	certs := tlsInfo.State.VerifiedChains
+	certs := ti.State.VerifiedChains
 	if len(certs) == 0 || len(certs[0]) == 0 {
-		return ctx, errors.New("missing certificate chain")
+		return nil, errors.New("missing certificate chain")
 	}
 
 	// find user roles from certificate extensions
@@ -96,9 +112,22 @@ func (i *interceptor) authorize(ctx context.Context, method string, jobID string
 	}
 	// check user has access to execute a specific method
 	if !HasAccess(method, roles) {
-		return ctx, errors.New("unauthorized, user does not have privileges")
+		return nil, errors.New("unauthorized, user does not have privileges")
+	}
+	return roles, nil
+}
+
+// verifyAuthenticatedUser checks if the user can access to the resource
+func (i *interceptor) verifyAuthenticatedUser(ctx context.Context, jobID string, roles []string) (context.Context, error) {
+	ti, err := tlsInfo(ctx)
+	if err != nil {
+		return ctx, err
 	}
 
+	certs := ti.State.VerifiedChains
+	if len(certs) == 0 || len(certs[0]) == 0 {
+		return ctx, errors.New("missing certificate chain")
+	}
 	// Get subject common name
 	userName := certs[0][0].Subject.CommonName
 
