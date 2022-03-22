@@ -3,6 +3,7 @@ package worker
 import (
 	"bytes"
 	"fmt"
+	"golang.org/x/sys/unix"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -13,7 +14,7 @@ const cgroupPath = "/sys/fs/cgroup"
 
 var testmode = false
 
-func addCgroupLimit(jobID string, pid int, maxCPUBandwidth *uint32, maxMemoryUsageBytes *uint64, maxRBPS *uint64, maxWBPS *uint64, maxRIOPS *uint64, maxWIOPS *uint64) error {
+func addCgroupLimit(jobID string, pid int, maxCPUBandwidth *uint32, maxMemoryUsageBytes *uint64, maxRBPS *uint64, maxWBPS *uint64, maxRIOPS *uint64, maxWIOPS *uint64, majorDevice *uint64, minorDevice *uint64) error {
 	if testmode {
 		return nil
 	}
@@ -51,9 +52,12 @@ func addCgroupLimit(jobID string, pid int, maxCPUBandwidth *uint32, maxMemoryUsa
 	if maxRBPS != nil ||
 		maxWBPS != nil ||
 		maxRIOPS != nil ||
-		maxWIOPS != nil {
+		maxWIOPS != nil ||
+		majorDevice != nil ||
+		minorDevice != nil {
 		path := filepath.Join(cgPath, "io.max")
 		buf := &bytes.Buffer{}
+		buf.WriteString(fmt.Sprintf("%d:%d", majorDevice, minorDevice))
 		if maxRBPS != nil {
 			fmt.Fprintf(buf, " rbps=%d", *maxRBPS)
 		}
@@ -80,4 +84,45 @@ func addCgroupLimit(jobID string, pid int, maxCPUBandwidth *uint32, maxMemoryUsa
 	}
 
 	return nil
+}
+
+func rmdir(path string) error {
+	err := unix.Rmdir(path)
+	if err == nil || err == unix.ENOENT { // unix errors are bare
+		return nil
+	}
+	return &os.PathError{Op: "rmdir", Path: path, Err: err}
+}
+
+// RemovePath aims to remove cgroup path. It does so recursively,
+// by removing any subdirectories (sub-cgroups) first.
+func RemovePath(jobID string) error {
+	if testmode {
+		return nil
+	}
+	path := filepath.Join(cgroupPath, jobID)
+	// try the fast path first
+	if err := rmdir(path); err == nil {
+		return nil
+	}
+
+	infos, err := os.ReadDir(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			err = nil
+		}
+		return err
+	}
+	for _, info := range infos {
+		if info.IsDir() {
+			// We should remove subcgroups dir first
+			if err = RemovePath(filepath.Join(path, info.Name())); err != nil {
+				break
+			}
+		}
+	}
+	if err == nil {
+		err = os.Remove(path)
+	}
+	return err
 }
