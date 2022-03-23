@@ -90,4 +90,89 @@ Streams the output of the job with the given ID
 - The scope of this project would only deal with a single linux worker server interfacing with multiple clients
 - Most of the time, the users want to see the full log content to check if the job performs as expected. The Worker writes the process output (stderr/stdout) on the disk as a log file. On the other hand, the old log files consume disk space and can potentially crash the system when no more space is left. Also a malicious or misconfigured program could potentially truncate the output file.
 
+### How to run this
+## Test
+
+```sh
+$ make test
+```
+## Build and run API
+
+```sh
+$ make api
+go build -o ./job-worker cmd/main.go
+```
+
+```sh
+$ ./job-worker
+```
+
+## Build and run Client with normal user permissions
+
+```sh
+$ make client
+go build -o ./client cli/client/userclient.go
+```
+
+Examples:
+```sh
+$ ./client start -c bash -args "-c" "while true;do date;sleep 1;done"
+started JobID: aa0319d4-e37d-420b-ac43-7316f6b032e5
+```
+
+```sh
+$ ./client status -j aa0319d4-e37d-420b-ac43-7316f6b032e5
+jobID: aa0319d4-e37d-420b-ac43-7316f6b032e5, status: RUNNING, exitCode: 0
+```
+
+```sh
+$ ./client stream -j aa0319d4-e37d-420b-ac43-7316f6b032e5
+Wed Mar 23 15:05:03 AEDT 2022
+Wed Mar 23 15:05:04 AEDT 2022
+Wed Mar 23 15:05:05 AEDT 2022
+Wed Mar 23 15:05:06 AEDT 2022
+Wed Mar 23 15:05:07 AEDT 2022
+Wed Mar 23 15:05:08 AEDT 2022
+Wed Mar 23 15:05:10 AEDT 2022
+```
+
+```sh
+ ./client stop -j aa0319d4-e37d-420b-ac43-7316f6b032e5
+stopped Job: aa0319d4-e37d-420b-ac43-7316f6b032e5
+```
+
+## Build and run Client with admin permissions
+NOTE: admin client has access to jobs of all other users in the system
+
+```sh
+$ make adminclient
+go build -o ./adminclient cli/adminclient/adminclient.go
+```
+
+Examples:
+```sh
+$ ./adminclient start -c bash -args "-c" "while true;do date;sleep 1;done"
+started JobID: aa0319d4-e37d-420b-ac43-7316f6b032e5
+```
+
+```sh
+$ ./adminclient status -j aa0319d4-e37d-420b-ac43-7316f6b032e5
+jobID: aa0319d4-e37d-420b-ac43-7316f6b032e5, status: RUNNING, exitCode: 0
+```
+
+```sh
+$ ./adminclient stream -j aa0319d4-e37d-420b-ac43-7316f6b032e5
+Wed Mar 23 15:05:03 AEDT 2022
+Wed Mar 23 15:05:04 AEDT 2022
+Wed Mar 23 15:05:05 AEDT 2022
+Wed Mar 23 15:05:06 AEDT 2022
+Wed Mar 23 15:05:07 AEDT 2022
+Wed Mar 23 15:05:08 AEDT 2022
+Wed Mar 23 15:05:10 AEDT 2022
+```
+
+```sh
+ ./adminclient stop -j aa0319d4-e37d-420b-ac43-7316f6b032e5
+stopped Job: aa0319d4-e37d-420b-ac43-7316f6b032e5
+```
 
