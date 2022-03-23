@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"github.com/mrinalirao/job-worker/cli"
-	"log"
+	"github.com/sirupsen/logrus"
 	"os"
 )
 
@@ -11,13 +11,13 @@ func main() {
 
 	params, err := cli.GetParams(os.Args[1:])
 	if err != nil {
-		log.Fatalf("Error parsing CLI parameters: %v", err)
+		logrus.Fatalf("Error parsing CLI parameters: %v", err)
 	}
 	//TODO: pass through a config file
 	cfg := cli.NewClientConfig("cert/server-ca-cert.pem", "cert/userclient-key.pem", "cert/userclient-cert.pem")
 	userClient, err := cli.NewWorkerClient(cfg)
 	if err != nil {
-		log.Fatalf("Error creating user client %v", err)
+		logrus.Fatalf("Error creating user client %v", err)
 	}
 	ctx := context.Background()
 	switch params.CliCommand {
