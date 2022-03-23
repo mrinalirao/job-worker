@@ -8,6 +8,10 @@ import (
 	"time"
 )
 
+func init() {
+	testmode = true
+}
+
 func TestWorker_Start(t *testing.T) {
 	w := NewWorker()
 	jobID, err := w.Start("echo", []string{"foo"})
