@@ -8,11 +8,11 @@ import (
 )
 
 func main() {
-	//TODO: pass through a config file
 	params, err := cli.GetParams(os.Args[1:])
 	if err != nil {
 		log.Fatalf("Error parsing CLI parameters: %v", err)
 	}
+	//TODO: pass through a config file
 	cfg := cli.NewClientConfig("cert/server-ca-cert.pem", "cert/adminclient-key.pem", "cert/adminclient-cert.pem")
 	userClient, err := cli.NewWorkerClient(cfg)
 	if err != nil {
