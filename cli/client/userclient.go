@@ -22,12 +22,20 @@ func main() {
 	ctx := context.Background()
 	switch params.CliCommand {
 	case cli.StartCmd:
-		cli.StartJobHandler(ctx, userClient, params)
+		if err := cli.StartJobHandler(ctx, userClient, params); err != nil {
+			logrus.Fatalf("failed to run cmd: %v", err)
+		}
 	case cli.StopCmd:
-		cli.StopJobHandler(ctx, userClient, params)
+		if err := cli.StopJobHandler(ctx, userClient, params); err != nil {
+			logrus.Fatalf("failed to run cmd: %v", err)
+		}
 	case cli.StatusCmd:
-		cli.GetJobStatusHandler(ctx, userClient, params)
+		if err := cli.GetJobStatusHandler(ctx, userClient, params); err != nil {
+			logrus.Fatalf("failed to run cmd: %v", err)
+		}
 	case cli.StreamCmd:
-		cli.GetJobOutputHandler(ctx, userClient, params)
+		if err := cli.GetJobOutputHandler(ctx, userClient, params); err != nil {
+			logrus.Fatalf("failed to run cmd: %v", err)
+		}
 	}
 }

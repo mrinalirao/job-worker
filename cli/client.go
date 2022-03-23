@@ -11,7 +11,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"io"
-	"log"
 	"os"
 )
 
@@ -72,59 +71,60 @@ func NewWorkerClient(config ClientConfig) (proto.WorkerServiceClient, error) {
 	return proto.NewWorkerServiceClient(conn), nil
 }
 
-func StartJobHandler(ctx context.Context, client proto.WorkerServiceClient, params *Params) {
+func StartJobHandler(ctx context.Context, client proto.WorkerServiceClient, params *Params) error {
 	resp, err := client.StartJob(ctx, &proto.StartJobRequest{
 		Cmd:  params.CommandName,
 		Args: params.Arguments,
 	})
 	if err != nil {
-		logrus.Fatalf("failed to start job %v", err)
+		return fmt.Errorf("failed to start job %w", err)
 	}
 	logrus.Infof("started JobID: %v", resp.GetID())
+	return nil
 }
 
-func StopJobHandler(ctx context.Context, client proto.WorkerServiceClient, params *Params) {
+func StopJobHandler(ctx context.Context, client proto.WorkerServiceClient, params *Params) error {
 	jobID := params.JobID
 	_, err := client.StopJob(ctx, &proto.StopJobRequest{
 		Id: jobID,
 	})
 	if err != nil {
-		logrus.Fatalf("failed to stop job %v", err)
+		return fmt.Errorf("failed to stop job %w", err)
 	}
 	logrus.Infof("stopped Job: %v", params.JobID)
+	return nil
 }
 
-func GetJobStatusHandler(ctx context.Context, client proto.WorkerServiceClient, params *Params) {
+func GetJobStatusHandler(ctx context.Context, client proto.WorkerServiceClient, params *Params) error {
 	jobID := params.JobID
 	resp, err := client.GetJobStatus(ctx, &proto.GetStatusRequest{
 		Id: jobID,
 	})
 	if err != nil {
-		logrus.Fatalf("failed to fetch job status: %v", err)
+		return fmt.Errorf("failed to fetch job status: %w", err)
 	}
 	logrus.Infof(" jobID: %v, status: %v, exitCode: %v ", jobID, resp.GetStatus(), resp.Exitcode)
+	return nil
 }
 
-func GetJobOutputHandler(ctx context.Context, client proto.WorkerServiceClient, params *Params) {
+func GetJobOutputHandler(ctx context.Context, client proto.WorkerServiceClient, params *Params) error {
 	jobID := params.JobID
 	resp, err := client.GetOutputStream(ctx, &proto.GetStreamRequest{Id: jobID})
 	if err != nil {
-		log.Fatalf("could not get output of Job: %v", err)
+		return fmt.Errorf("could not get output of Job: %w", err)
 	}
 
 	for {
 		select {
 		case <-resp.Context().Done():
-			logrus.Fatalf(resp.Context().Err().Error())
-			return
+			return fmt.Errorf(resp.Context().Err().Error())
 		default:
 			l, err := resp.Recv()
 			if err != nil {
 				if err == io.EOF {
-					return
+					return nil
 				}
-				logrus.Fatalf("failed to receive log line on stream: %v", err)
-				return
+				return fmt.Errorf("failed to receive log line on stream: %w", err)
 			}
 			if b := l.GetResult(); len(b) > 0 {
 				logrus.Infof("%s", b)
