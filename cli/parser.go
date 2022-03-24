@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"flag"
 	"fmt"
+	"strings"
 )
 
 type Params struct {
@@ -20,7 +22,6 @@ const (
 )
 
 func GetParams(args []string) (*Params, error) {
-	//TODO: parse env vars using flag
 	argsLen := len(args)
 
 	if argsLen < 2 {
@@ -45,30 +46,54 @@ func getJobCommandParams(command string, args []string) (*Params, error) {
 	params := Params{
 		CliCommand: command,
 	}
-
-	if len(args) != 2 || args[0] != "-j" {
-		return nil, fmt.Errorf("invalid parameters for %v command: %v", params.CliCommand, args)
+	fs := flag.NewFlagSet(command, flag.ExitOnError)
+	jobID := fs.String("j", "", "job ID of the job")
+	role := fs.String("r", "", "role to start the client with, options: [admin, user]")
+	fs.Parse(args)
+	if role == nil || (*role != "user" && *role != "admin") {
+		return nil, fmt.Errorf("invalid role for %v command", params.CliCommand)
 	}
-	params.JobID = args[1]
+	if jobID == nil {
+		return nil, fmt.Errorf("missing jobID for %v command", params.CliCommand)
+	}
+	params.JobID = *jobID
+	params.Role = *role
 
 	return &params, nil
+}
+
+// Create a new type for a list of args
+type argsList []string
+
+// Implement the flag.Value interface
+func (s *argsList) String() string {
+	return fmt.Sprintf("%v", *s)
+}
+
+func (s *argsList) Set(value string) error {
+	*s = strings.Split(value, ",")
+	return nil
 }
 
 func getStartCommandParams(args []string) (*Params, error) {
 	params := Params{
 		CliCommand: StartCmd,
 	}
-
-	if len(args) < 4 || args[0] != "-r" || args[2] != "-c" {
-		return nil, fmt.Errorf("invalid parameters for %v command: %v", params.CliCommand, args)
+	fs := flag.NewFlagSet(StartCmd, flag.ExitOnError)
+	role := fs.String("r", "", "role to start the client with, options: [admin, user]")
+	commandName := fs.String("c", "", "command to run")
+	var a argsList
+	fs.Var(&a, "args", "comma seperated list of args to the command")
+	fs.Parse(args)
+	if commandName == nil {
+		return nil, fmt.Errorf("missing command name for %v command", params.CliCommand)
 	}
-
-	params.Role = args[1]
-	params.CommandName = args[3]
-
-	if len(args) >= 6 && args[4] == "-args" {
-		params.Arguments = args[5:]
+	if role == nil || (*role != "user" && *role != "admin") {
+		return nil, fmt.Errorf("invalid role for %v command", params.CliCommand)
 	}
+	params.Role = *role
+	params.CommandName = *commandName
+	params.Arguments = a
 
 	return &params, nil
 }

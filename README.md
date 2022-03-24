@@ -113,7 +113,7 @@ go build -o ./job-worker cmd/main.go
 $ ./job-worker
 ```
 
-## Build and run Client with normal user permissions
+## Build and run client
 
 ```sh
 $ make client
@@ -121,19 +121,19 @@ go build -o ./client cli/client/userclient.go
 ```
 
 Examples:
-Note: You can provide the role of the user while starting the client, the role can be one of [user, admin]
+Note: You must provide the role of the user while running client commands, the role can be one of [user, admin]
 ```sh
 $ ./client start -r user -c bash -args "-c" "while true;do date;sleep 1;done"
 started JobID: aa0319d4-e37d-420b-ac43-7316f6b032e5
 ```
 
 ```sh
-$ ./client status -j aa0319d4-e37d-420b-ac43-7316f6b032e5
+$ ./client status -r user -j aa0319d4-e37d-420b-ac43-7316f6b032e5
 jobID: aa0319d4-e37d-420b-ac43-7316f6b032e5, status: RUNNING, exitCode: 0
 ```
 
 ```sh
-$ ./client stream -j aa0319d4-e37d-420b-ac43-7316f6b032e5
+$ ./client stream -r user -j aa0319d4-e37d-420b-ac43-7316f6b032e5
 Wed Mar 23 15:05:03 AEDT 2022
 Wed Mar 23 15:05:04 AEDT 2022
 Wed Mar 23 15:05:05 AEDT 2022
@@ -144,6 +144,6 @@ Wed Mar 23 15:05:10 AEDT 2022
 ```
 
 ```sh
- ./client stop -j aa0319d4-e37d-420b-ac43-7316f6b032e5
+ ./client stop -r user -j aa0319d4-e37d-420b-ac43-7316f6b032e5
 stopped Job: aa0319d4-e37d-420b-ac43-7316f6b032e5
 ```
