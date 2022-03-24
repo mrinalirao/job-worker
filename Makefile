@@ -1,9 +1,16 @@
 .PHONY: api
 api:
-	go build -o ./job-worker cmd/main.go
+	@-$(MAKE) protofile
+	go build -o ./job-worker cmd/api/main.go
+
+.PHONY: client
+client:
+	@-$(MAKE) protofile
+	go build -o ./client cmd/client/main.go
 
 .PHONY: test
 test:
+	@-$(MAKE) protofile
 	go test ./... -v
 
 .PHONY: protofile
