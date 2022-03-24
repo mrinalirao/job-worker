@@ -123,7 +123,7 @@ go build -o ./client cli/client/userclient.go
 Examples:
 Note: You must provide the role of the user while running client commands, the role can be one of [user, admin]
 ```sh
-$ ./client start -r user -c bash -args "-c" "while true;do date;sleep 1;done"
+$ ./client start -r user -c bash -args "-c","while true;do date;sleep 1;done"
 started JobID: aa0319d4-e37d-420b-ac43-7316f6b032e5
 ```
 

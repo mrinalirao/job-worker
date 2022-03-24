@@ -36,7 +36,7 @@ func loadTLSCredentials(cc ClientConfig) (credentials.TransportCredentials, erro
 	// Load the CA certificate
 	trustedCert, err := os.ReadFile(cc.CAFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load trusted certificate. %s.", err)
+		return nil, fmt.Errorf("failed to load trusted certificate: %w", err)
 	}
 	// Put the CA certificate to certificate pool
 	certPool := x509.NewCertPool()
@@ -116,8 +116,10 @@ func GetJobOutputHandler(ctx context.Context, client proto.WorkerServiceClient, 
 
 	for {
 		select {
+		case <-ctx.Done():
+			return ctx.Err()
 		case <-resp.Context().Done():
-			return fmt.Errorf(resp.Context().Err().Error())
+			return resp.Context().Err()
 		default:
 			l, err := resp.Recv()
 			if err != nil {
