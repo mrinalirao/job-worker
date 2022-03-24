@@ -1,12 +1,15 @@
 package cli
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type Params struct {
 	CliCommand  string
 	CommandName string
 	Arguments   []string
 	JobID       string
+	Role        string
 }
 
 const (
@@ -17,6 +20,7 @@ const (
 )
 
 func GetParams(args []string) (*Params, error) {
+	//TODO: parse env vars using flag
 	argsLen := len(args)
 
 	if argsLen < 2 {
@@ -55,14 +59,15 @@ func getStartCommandParams(args []string) (*Params, error) {
 		CliCommand: StartCmd,
 	}
 
-	if len(args) < 2 || args[0] != "-c" {
+	if len(args) < 4 || args[0] != "-r" || args[2] != "-c" {
 		return nil, fmt.Errorf("invalid parameters for %v command: %v", params.CliCommand, args)
 	}
 
-	params.CommandName = args[1]
+	params.Role = args[1]
+	params.CommandName = args[3]
 
-	if len(args) >= 4 && args[2] == "-args" {
-		params.Arguments = args[3:]
+	if len(args) >= 6 && args[4] == "-args" {
+		params.Arguments = args[5:]
 	}
 
 	return &params, nil

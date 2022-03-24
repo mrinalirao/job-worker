@@ -8,13 +8,17 @@ import (
 )
 
 func main() {
-
 	params, err := cli.GetParams(os.Args[1:])
 	if err != nil {
 		logrus.Fatalf("Error parsing CLI parameters: %v", err)
 	}
+	var cfg cli.ClientConfig
 	//TODO: pass through a config file
-	cfg := cli.NewClientConfig("cert/server-ca-cert.pem", "cert/userclient-key.pem", "cert/userclient-cert.pem")
+	if params.Role == "admin" {
+		cfg = cli.NewClientConfig("cert/server-ca-cert.pem", "cert/adminclient-key.pem", "cert/adminclient-cert.pem")
+	} else {
+		cfg = cli.NewClientConfig("cert/server-ca-cert.pem", "cert/userclient-key.pem", "cert/userclient-cert.pem")
+	}
 	userClient, err := cli.NewWorkerClient(cfg)
 	if err != nil {
 		logrus.Fatalf("Error creating user client %v", err)

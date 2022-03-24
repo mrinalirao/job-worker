@@ -55,17 +55,17 @@ func loadTLSCredentials(cc ClientConfig) (credentials.TransportCredentials, erro
 }
 
 func NewWorkerClient(config ClientConfig) (proto.WorkerServiceClient, error) {
-	dialOptions := grpc.WithInsecure()
-	if config.CAFile != "" && config.CertFile != "" && config.KeyFile != "" {
-		transportCredentials, err := loadTLSCredentials(config)
-		if err != nil {
-			return nil, err
-		}
-		dialOptions = grpc.WithTransportCredentials(transportCredentials)
+	if config.CAFile == "" || config.CertFile == "" || config.KeyFile == "" {
+		return nil, fmt.Errorf("can not connect with server: missing config")
 	}
+	transportCredentials, err := loadTLSCredentials(config)
+	if err != nil {
+		return nil, err
+	}
+	dialOptions := grpc.WithTransportCredentials(transportCredentials)
 	conn, err := grpc.Dial(":8010", dialOptions)
 	if err != nil {
-		logrus.Fatalf("can not connect with server %v", err)
+		return nil, fmt.Errorf("can not connect with server %w", err)
 	}
 
 	return proto.NewWorkerServiceClient(conn), nil
